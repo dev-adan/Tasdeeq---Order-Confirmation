@@ -28,8 +28,10 @@ export const action = async ({ request }) => {
       const from = message.from; // Customer phone number
       const messageText = message.text?.body;
       const messageId = message.id;
+      const contextMessageId = message.context?.id; // ID of message customer replied to
 
       console.log(`Message from ${from}: ${messageText}`);
+      console.log(`Context message ID: ${contextMessageId}`);
 
       if (!messageText) {
         return new Response("No message text", { status: 200 });
@@ -43,21 +45,39 @@ export const action = async ({ request }) => {
         return new Response("Unknown response", { status: 200 });
       }
 
-      // Find the order by customer phone
-      const order = await db.order.findFirst({
-        where: {
-          customerPhone: {
-            contains: from.slice(-10) // Match last 10 digits
+      // Find the order by WhatsApp message ID (most accurate)
+      let order = null;
+      
+      if (contextMessageId) {
+        // Customer replied to our message - find order by that message ID
+        order = await db.order.findFirst({
+          where: {
+            whatsappMessageId: contextMessageId,
+            status: 'pending'
           },
-          status: 'pending'
-        },
-        orderBy: {
-          createdAt: 'desc'
-        },
-        include: {
-          shop: true
-        }
-      });
+          include: {
+            shop: true
+          }
+        });
+      }
+      
+      // Fallback: Find by phone number (most recent pending order)
+      if (!order) {
+        order = await db.order.findFirst({
+          where: {
+            customerPhone: {
+              contains: from.slice(-10) // Match last 10 digits
+            },
+            status: 'pending'
+          },
+          orderBy: {
+            createdAt: 'desc'
+          },
+          include: {
+            shop: true
+          }
+        });
+      }
 
       if (!order) {
         console.log("No pending order found for this phone number");
