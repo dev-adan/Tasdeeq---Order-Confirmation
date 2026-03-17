@@ -1,0 +1,118 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.sqlite"
+}
+
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+// Merchant settings and subscription
+model Shop {
+  id                    Int       @id @default(autoincrement())
+  shopDomain            String    @unique
+  
+  // Subscription & Billing
+  subscriptionStatus    String    @default("trial")  // "trial", "active", "cancelled", "expired", "paused"
+  planType              String    @default("free")   // "free", "basic", "premium", "enterprise"
+  shopifyChargeId       String?   // Shopify billing charge ID
+  
+  // Trial & Billing Dates
+  trialEndsAt           DateTime?
+  subscriptionStartedAt DateTime?
+  subscriptionEndsAt    DateTime?
+  billingCycleStart     DateTime?  // When current billing cycle started
+  billingCycleEnd       DateTime?  // When current billing cycle ends
+  
+  // Confirmation Limits (based on plan)
+  monthlyConfirmationLimit    Int       @default(150)  // Total confirmations allowed per month
+  confirmationsUsedThisMonth  Int       @default(0)    // How many used this month
+  confirmationsUsedToday      Int       @default(0)    // How many used today (for free plan)
+  confirmationsRemaining      Int       @default(150)  // Remaining = Limit - Used
+  lastDailyReset              DateTime  @default(now()) // Last time we reset daily counter
+  
+  // Lifetime Stats
+  totalConfirmationsSent      Int       @default(0)    // All-time total
+  totalOrdersProcessed        Int       @default(0)    // All-time orders
+  
+  // Courier settings (merchant's own courier account)
+  courierProvider       String?   // "dhl", "fedex", "ups", "manual", null
+  courierApiKey         String?   // Merchant's courier API key (encrypted)
+  
+  // App settings
+  orderTypeFilter       String    @default("all")  // "all", "cod", "prepaid"
+  isActive              Boolean   @default(true)
+  
+  // Contact
+  merchantEmail         String?
+  merchantPhone         String?
+  
+  // Timestamps
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  lastBillingReset      DateTime  @default(now())  // Last time we reset monthly counters
+  
+  orders                Order[]
+}
+
+// Order tracking
+model Order {
+  id                    Int       @id @default(autoincrement())
+  shopId                Int
+  
+  // Shopify data
+  shopifyOrderId        String    @unique
+  shopifyOrderNumber    String
+  
+  // Customer data
+  customerPhone         String
+  customerName          String
+  orderTotal            String
+  paymentMethod         String
+  
+  // Status tracking
+  status                String    @default("pending")  // "pending", "confirmed", "cancelled", "shipped", "delivered"
+  
+  // WhatsApp tracking
+  whatsappMessageSent   Boolean   @default(false)
+  whatsappMessageId     String?
+  whatsappSentAt        DateTime?
+  customerResponse      String?   // "confirmed", "cancelled"
+  customerRespondedAt   DateTime?
+  
+  // Shipment tracking
+  trackingNumber        String?
+  courierName           String?
+  shipmentCreated       Boolean   @default(false)
+  shipmentCreatedAt     DateTime?
+  trackingSentAt        DateTime?  // When tracking was sent to customer
+  
+  // Timestamps
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  
+  shop                  Shop      @relation(fields: [shopId], references: [id])
+}
